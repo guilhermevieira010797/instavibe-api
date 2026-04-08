@@ -10,19 +10,19 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   name: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true, select: false })
   password: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   phone: string | null;
 
-  @Column({ nullable: true, name: 'google_id' })
+  @Column({ type: 'varchar', nullable: true, name: 'google_id' })
   googleId: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
