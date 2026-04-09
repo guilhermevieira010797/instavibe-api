@@ -4,10 +4,12 @@ import {
   IsOptional,
   IsArray,
   IsInt,
+  IsEnum,
   Min,
   ArrayMinSize,
   IsUUID,
 } from 'class-validator';
+import { ImageStyle } from '../providers/ai-provider.interface';
 
 export class RefineImagesDto {
   @IsString()
@@ -26,6 +28,10 @@ export class RefineImagesDto {
   slideIndexes?: number[];
 
   @IsOptional()
+  @IsEnum(ImageStyle)
+  imageStyle?: ImageStyle;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   referenceImagesBase64?: string[];
@@ -33,4 +39,8 @@ export class RefineImagesDto {
   @IsOptional()
   @IsUUID()
   profileId?: string;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
 }

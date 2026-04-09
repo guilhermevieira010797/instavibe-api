@@ -10,6 +10,7 @@ import {
 import type { AiProvider } from './providers/ai-provider.interface';
 import { ProfilesService } from '../profiles/profiles.service';
 import { Profile } from '../profiles/profile.entity';
+import { DEVELOPER_PROMPT } from './constants/developer-prompt';
 
 @Injectable()
 export class AiService {
@@ -19,15 +20,17 @@ export class AiService {
   ) {}
 
   async generateImages(
-    input: Omit<GeneratePostInput, 'profileContext'> & {
+    input: Omit<GeneratePostInput, 'profileContext' | 'instructions'> & {
       profileId?: string;
       userId?: string;
+      instructions?: string;
     },
   ): Promise<GeneratedImages> {
-    const profileContext = await this.resolveProfileContext(
-      input.profileId,
-      input.userId,
-    );
+    const profile = await this.resolveProfile(input.profileId, input.userId);
+    const profileContext = profile
+      ? this.buildBrandContext(profile)
+      : undefined;
+    const instructions = this.buildInstructions(profile, input.instructions);
 
     const referenceImages = await this.mergeProfileReferences(
       input.profileId,
@@ -39,45 +42,113 @@ export class AiService {
       prompt: input.prompt,
       postType: input.postType,
       slidesCount: input.slidesCount,
+      imageStyle: input.imageStyle,
       referenceImagesBase64: referenceImages,
       profileContext,
+      instructions,
     });
   }
 
   async refineImages(
-    input: Omit<RefineImagesInput, 'profileContext'> & {
+    input: Omit<RefineImagesInput, 'profileContext' | 'instructions'> & {
       profileId?: string;
       userId?: string;
+      instructions?: string;
     },
   ): Promise<GeneratedImages> {
-    const profileContext = await this.resolveProfileContext(
-      input.profileId,
-      input.userId,
-    );
+    const profile = await this.resolveProfile(input.profileId, input.userId);
+    const profileContext = profile
+      ? this.buildBrandContext(profile)
+      : undefined;
+    const instructions = this.buildInstructions(profile, input.instructions);
 
     return this.provider.refineImages({
       prompt: input.prompt,
       currentImagesBase64: input.currentImagesBase64,
       slideIndexes: input.slideIndexes,
+      imageStyle: input.imageStyle,
       referenceImagesBase64: input.referenceImagesBase64,
       profileContext,
+      instructions,
     });
   }
 
   async generateCaption(
-    input: GenerateCaptionInput,
+    input: Omit<GenerateCaptionInput, 'instructions'> & {
+      profileId?: string;
+      userId?: string;
+      instructions?: string;
+    },
   ): Promise<GeneratedCaption> {
-    return this.provider.generateCaption(input);
+    const profile = await this.resolveProfile(input.profileId, input.userId);
+    const instructions = this.buildInstructions(profile, input.instructions);
+
+    return this.provider.generateCaption({
+      prompt: input.prompt,
+      imagesBase64: input.imagesBase64,
+      instructions,
+    });
   }
 
-  private async resolveProfileContext(
+  private async resolveProfile(
     profileId?: string,
     userId?: string,
-  ): Promise<string | undefined> {
+  ): Promise<Profile | undefined> {
     if (!profileId || !userId) return undefined;
+    return this.profilesService.findById(profileId, userId);
+  }
 
-    const profile = await this.profilesService.findById(profileId, userId);
-    return this.buildProfileContext(profile);
+  private buildInstructions(
+    profile?: Profile,
+    userInstructions?: string,
+  ): string {
+    const parts: string[] = [DEVELOPER_PROMPT];
+
+    const brandContext = profile ? this.buildBrandContext(profile) : undefined;
+
+    if (brandContext) {
+      parts.push(brandContext);
+    }
+
+    if (userInstructions) {
+      parts.push(`Instruções adicionais do usuário:\n${userInstructions}`);
+    }
+
+    return parts.join('\n\n');
+  }
+
+  private buildBrandContext(profile: Profile): string | undefined {
+    const lines: string[] = [];
+
+    if (profile.name) lines.push(`- Nome da marca: ${profile.name}`);
+    if (profile.niche) lines.push(`- Nicho: ${profile.niche}`);
+    if (profile.targetAudience)
+      lines.push(`- Público-alvo: ${profile.targetAudience}`);
+    if (profile.communicationGoal)
+      lines.push(`- Objetivo do post: ${profile.communicationGoal}`);
+    if (profile.toneOfVoice) lines.push(`- Tom de voz: ${profile.toneOfVoice}`);
+    if (profile.brandDifferentials)
+      lines.push(`- Diferenciais: ${profile.brandDifferentials}`);
+    if (profile.description)
+      lines.push(`- Produto/serviço: ${profile.description}`);
+    if (profile.forbiddenWords?.length)
+      lines.push(`- Restrições: ${profile.forbiddenWords.join(', ')}`);
+    if (profile.visualIdentity)
+      lines.push(`- Referências visuais: ${profile.visualIdentity}`);
+    if (profile.colorPalette?.length)
+      lines.push(`- Paleta de cores: ${profile.colorPalette.join(', ')}`);
+    if (profile.fontStyle)
+      lines.push(`- Estilo de fonte: ${profile.fontStyle}`);
+    if (profile.preferredCta)
+      lines.push(`- CTA preferido: ${profile.preferredCta}`);
+    if (profile.keywords?.length)
+      lines.push(`- Palavras-chave: ${profile.keywords.join(', ')}`);
+    if (profile.logoUrl) lines.push(`- Logo da marca: ${profile.logoUrl}`);
+    if (profile.notes) lines.push(`- Observações adicionais: ${profile.notes}`);
+
+    if (!lines.length) return undefined;
+
+    return `Contexto da marca:\n${lines.join('\n')}`;
   }
 
   private async mergeProfileReferences(
@@ -95,27 +166,5 @@ export class AiService {
     }
 
     return refs.length ? refs : undefined;
-  }
-
-  private buildProfileContext(profile: Profile): string | undefined {
-    const parts: string[] = [];
-
-    if (profile.niche) {
-      parts.push(`Nicho: ${profile.niche}`);
-    }
-    if (profile.description) {
-      parts.push(`Descrição do perfil: ${profile.description}`);
-    }
-    if (profile.visualIdentity) {
-      parts.push(`Identidade visual: ${profile.visualIdentity}`);
-    }
-    if (profile.colorPalette?.length) {
-      parts.push(`Paleta de cores: ${profile.colorPalette.join(', ')}`);
-    }
-    if (profile.fontStyle) {
-      parts.push(`Estilo de fonte: ${profile.fontStyle}`);
-    }
-
-    return parts.length ? parts.join('\n') : undefined;
   }
 }

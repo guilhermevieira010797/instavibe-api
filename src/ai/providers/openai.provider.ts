@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
@@ -9,6 +10,7 @@ import {
   GenerateCaptionInput,
   GeneratedCaption,
   RefineImagesInput,
+  IMAGE_STYLE_LABELS,
 } from './ai-provider.interface';
 
 type ResponseInputContent = Responses.ResponseInputContent;
@@ -32,6 +34,7 @@ export class OpenAiProvider implements AiProvider {
 
     const response = await this.client.responses.create({
       model: this.configService.get<string>('OPENAI_MODEL', 'gpt-4.1'),
+      instructions: input.instructions,
       input: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
@@ -66,7 +69,16 @@ export class OpenAiProvider implements AiProvider {
       `- Gere EXATAMENTE ${imageCount} imagem(ns).`,
       `- As imagens devem ter proporção 1:1 (1080x1080), estilo profissional e moderno.`,
       `- Para carrosséis, cada slide deve ser visualmente coeso mas trazer informação progressiva.`,
-      `- Foque exclusivamente na geração visual. Não inclua texto de resposta.`,
+      ...(input.imageStyle
+        ? [
+            `- ESTILO VISUAL OBRIGATÓRIO: ${IMAGE_STYLE_LABELS[input.imageStyle]}. Todas as imagens devem seguir rigorosamente este estilo.`,
+          ]
+        : []),
+      ``,
+      `Após gerar as imagens, responda com um resumo em texto explicando:`,
+      `- O conceito visual escolhido e por quê.`,
+      `- Um checklist das decisões aplicadas (ex: paleta de cores, estilo, composição, elementos).`,
+      `- Formato: use marcadores (•) para o checklist.`,
       ...(input.profileContext
         ? [
             ``,
@@ -107,20 +119,32 @@ export class OpenAiProvider implements AiProvider {
     const totalSlides = currentImagesBase64.length;
     const isPartial = targetIndexes.length < totalSlides;
 
+    const slideLabels = targetIndexes.map((i) => `Slide ${i + 1}`).join(', ');
+
     const systemPrompt = [
       `Você é um designer especialista em criação visual para Instagram.`,
       `O usuário quer refinar ${targetIndexes.length} imagem(ns) de um post que tem ${totalSlides} slide(s) no total.`,
+      `Slides a serem refinados: ${slideLabels}.`,
       ``,
       `Regras:`,
-      `- Gere EXATAMENTE ${targetIndexes.length} imagem(ns) refinada(s).`,
+      `- Gere EXATAMENTE ${targetIndexes.length} imagem(ns) refinada(s), na mesma ordem informada.`,
       `- Mantenha proporção 1:1 (1080x1080), estilo profissional e moderno.`,
+      ...(input.imageStyle
+        ? [
+            `- ESTILO VISUAL OBRIGATÓRIO: ${IMAGE_STYLE_LABELS[input.imageStyle]}. Mantenha rigorosamente este estilo nas imagens refinadas.`,
+          ]
+        : []),
       ...(isPartial
         ? [
             `- As imagens que NÃO estão sendo refinadas permanecem inalteradas.`,
             `- Mantenha coerência visual com o restante do carrossel.`,
           ]
         : []),
-      `- Foque exclusivamente na geração visual. Não inclua texto de resposta.`,
+      ``,
+      `Após gerar as imagens refinadas, responda com um resumo em texto explicando:`,
+      `- O que foi alterado em cada imagem.`,
+      `- Um checklist das alterações aplicadas (ex: ajuste de cor, recomposição, novo elemento, etc).`,
+      `- Formato: use marcadores (•) para o checklist.`,
       ...(input.profileContext
         ? [
             ``,
@@ -133,7 +157,7 @@ export class OpenAiProvider implements AiProvider {
     const userContent: ResponseInputContent[] = [
       {
         type: 'input_text' as const,
-        text: `Refine as imagens a seguir com base neste pedido: ${prompt}`,
+        text: `Refine as imagens a seguir com base neste pedido: ${prompt}\n\nAs imagens abaixo correspondem aos: ${slideLabels}.`,
       },
     ];
 
@@ -157,6 +181,7 @@ export class OpenAiProvider implements AiProvider {
 
     const response = await this.client.responses.create({
       model: this.configService.get<string>('OPENAI_MODEL', 'gpt-4.1'),
+      instructions: input.instructions,
       input: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
@@ -171,16 +196,16 @@ export class OpenAiProvider implements AiProvider {
       ],
     });
 
-    const refinedImages = this.parseResponse(response).imagesBase64;
+    const parsed = this.parseResponse(response);
 
     const result = [...currentImagesBase64];
     for (let i = 0; i < targetIndexes.length; i++) {
-      if (refinedImages[i]) {
-        result[targetIndexes[i]] = refinedImages[i];
+      if (parsed.imagesBase64[i]) {
+        result[targetIndexes[i]] = parsed.imagesBase64[i];
       }
     }
 
-    return { imagesBase64: result };
+    return { imagesBase64: result, message: parsed.message };
   }
 
   async generateCaption(
@@ -200,6 +225,7 @@ export class OpenAiProvider implements AiProvider {
 
     const response = await this.client.responses.create({
       model: this.configService.get<string>('OPENAI_MODEL', 'gpt-4.1'),
+      instructions: input.instructions,
       input: [
         {
           role: 'system',
@@ -234,13 +260,21 @@ export class OpenAiProvider implements AiProvider {
 
   private parseResponse(response: OpenAI.Responses.Response): GeneratedImages {
     const imagesBase64: string[] = [];
+    let message = '';
 
     for (const output of response.output) {
       if (output.type === 'image_generation_call' && output.result) {
         imagesBase64.push(output.result);
       }
+      if (output.type === 'message' && output.content) {
+        for (const block of output.content) {
+          if (block.type === 'output_text') {
+            message += block.text;
+          }
+        }
+      }
     }
 
-    return { imagesBase64 };
+    return { imagesBase64, message: message.trim() };
   }
 }

@@ -9,6 +9,7 @@ import {
   IsArray,
   IsUUID,
 } from 'class-validator';
+import { ImageStyle } from '../providers/ai-provider.interface';
 
 export class GeneratePostDto {
   @IsString()
@@ -25,6 +26,10 @@ export class GeneratePostDto {
   slidesCount?: number;
 
   @IsOptional()
+  @IsEnum(ImageStyle)
+  imageStyle?: ImageStyle;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   referenceImagesBase64?: string[];
@@ -32,4 +37,8 @@ export class GeneratePostDto {
   @IsOptional()
   @IsUUID()
   profileId?: string;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
 }

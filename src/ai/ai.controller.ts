@@ -45,7 +45,13 @@ export class AiController {
 
   @Post('generate-caption')
   @ApiOperation({ summary: 'Gerar legenda para postagem via IA' })
-  async generateCaption(@Body() dto: GenerateCaptionDto) {
-    return this.aiService.generateCaption(dto);
+  async generateCaption(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: GenerateCaptionDto,
+  ) {
+    return this.aiService.generateCaption({
+      ...dto,
+      userId: req.user.id,
+    });
   }
 }
