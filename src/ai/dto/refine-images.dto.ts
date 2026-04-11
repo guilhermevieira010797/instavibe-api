@@ -10,11 +10,16 @@ import {
   IsUUID,
 } from 'class-validator';
 import { ImageStyle } from '../providers/ai-provider.interface';
+import { AI_CATEGORIES } from '../../billing/config/ai-categories.config';
+import type { AiCategory } from '../../billing/config/ai-categories.config';
 
 export class RefineImagesDto {
   @IsString()
   @IsNotEmpty()
   prompt: string;
+
+  @IsEnum(AI_CATEGORIES)
+  category: AiCategory;
 
   @IsArray()
   @ArrayMinSize(1)

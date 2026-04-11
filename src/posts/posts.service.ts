@@ -13,6 +13,10 @@ import { Profile } from '../profiles/profile.entity';
 import { AiService } from '../ai/ai.service';
 import { InstagramGraphService } from './instagram-graph.service';
 import { S3Service } from '../s3/s3.service';
+import { User } from '../users/user.entity';
+import { SubscriptionPolicyService } from '../billing/subscription-policy.service';
+import { CreditLedgerService } from '../billing/credit-ledger.service';
+import { AiCategoriesConfig } from '../billing/config/ai-categories.config';
 
 @Injectable()
 export class PostsService {
@@ -23,21 +27,48 @@ export class PostsService {
     private readonly aiService: AiService,
     private readonly instagramGraphService: InstagramGraphService,
     private readonly s3Service: S3Service,
+    private readonly policy: SubscriptionPolicyService,
+    private readonly ledger: CreditLedgerService,
+    private readonly aiCategories: AiCategoriesConfig,
   ) {}
 
-  async create(userId: string, dto: CreatePostDto): Promise<Post> {
+  async create(user: User, dto: CreatePostDto): Promise<Post> {
+    const userId = user.id;
+
+    this.policy.assertCategory(user, dto.category);
+    if (dto.postType === 'carousel') {
+      this.policy.assertCarousel(user);
+    }
+
     const profile = dto.profileId
       ? await this.profilesService.findById(dto.profileId, userId)
       : null;
 
-    const { imagesBase64 } = await this.aiService.generateImages({
-      prompt: dto.prompt,
-      postType: dto.postType,
-      slidesCount: dto.slidesCount,
-      referenceImagesBase64: dto.referenceImagesBase64,
-      profileId: profile?.id,
-      userId,
-    });
+    const imageCount =
+      dto.postType === 'carousel' ? (dto.slidesCount ?? 5) : 1;
+    const cost = this.aiCategories.costFor(
+      dto.category,
+      'generate',
+      imageCount,
+    );
+    const debit = await this.ledger.consume(userId, cost);
+
+    let imagesBase64: string[];
+    try {
+      const result = await this.aiService.generateImages({
+        prompt: dto.prompt,
+        postType: dto.postType,
+        slidesCount: dto.slidesCount,
+        referenceImagesBase64: dto.referenceImagesBase64,
+        profileId: profile?.id,
+        userId,
+        category: dto.category,
+      });
+      imagesBase64 = result.imagesBase64;
+    } catch (err) {
+      await this.ledger.refund(userId, debit);
+      throw err;
+    }
 
     const post = this.postsRepository.create({
       userId,
@@ -98,7 +129,9 @@ export class PostsService {
     return this.postsRepository.save(post);
   }
 
-  async publish(id: string, userId: string): Promise<Post> {
+  async publish(id: string, user: User): Promise<Post> {
+    this.policy.assertInstagram(user);
+    const userId = user.id;
     const post = await this.findById(id, userId);
 
     if (post.draft) {

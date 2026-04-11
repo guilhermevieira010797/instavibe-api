@@ -33,7 +33,7 @@ export class PostsController {
   @Post()
   @ApiOperation({ summary: 'Criar postagem com geração de imagens via IA' })
   create(@Req() req: AuthenticatedRequest, @Body() dto: CreatePostDto) {
-    return this.postsService.create(req.user.id, dto);
+    return this.postsService.create(req.user, dto);
   }
 
   @Get()
@@ -81,7 +81,7 @@ export class PostsController {
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.postsService.publish(id, req.user.id);
+    return this.postsService.publish(id, req.user);
   }
 
   @Delete(':id')

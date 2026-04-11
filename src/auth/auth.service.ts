@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -10,6 +12,7 @@ import type { StringValue } from 'ms';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 import { SafeUser, sanitizeUser } from '../users/user.utils';
+import { MailService } from '../mail/mail.service';
 import { SignupDto } from './dto/signup.dto';
 
 export interface AuthResponse {
@@ -24,6 +27,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User> {
@@ -65,6 +69,26 @@ export class AuthService {
     return { ...tokens, user: this.sanitizeUser(user) };
   }
 
+  private generateCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  private getVerificationTtlMs(): number {
+    const min = parseInt(
+      this.configService.get<string>('EMAIL_VERIFICATION_CODE_TTL_MIN', '30'),
+      10,
+    );
+    return min * 60 * 1000;
+  }
+
+  private getPasswordResetTtlMs(): number {
+    const min = parseInt(
+      this.configService.get<string>('PASSWORD_RESET_CODE_TTL_MIN', '30'),
+      10,
+    );
+    return min * 60 * 1000;
+  }
+
   async signup({
     email,
     password,
@@ -82,7 +106,22 @@ export class AuthService {
       password: passwordHash,
       name: name.trim(),
       phone: phone?.trim() ?? null,
+      isEmailVerified: false,
     });
+
+    const code = this.generateCode();
+    const expiresAt = new Date(Date.now() + this.getVerificationTtlMs());
+    await this.usersService.setEmailVerificationCode(user.id, code, expiresAt);
+
+    try {
+      await this.mailService.sendWelcomeWithVerification(
+        user.email,
+        user.name,
+        code,
+      );
+    } catch {
+      // não bloqueia o signup se o envio falhar
+    }
 
     return this.buildAuthResponse(user);
   }
@@ -96,7 +135,96 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  googleLogin(user: User): AuthResponse {
+  async googleLogin(
+    input: { user: User; isNew?: boolean } | User,
+  ): Promise<AuthResponse> {
+    const user = 'user' in input ? input.user : input;
+    const isNew = 'isNew' in input ? input.isNew : false;
+    if (isNew) {
+      try {
+        await this.mailService.sendWelcome(user.email, user.name);
+      } catch {
+        // ignora falha de e-mail
+      }
+    }
     return this.buildAuthResponse(user);
+  }
+
+  async verifyEmail(email: string, code: string): Promise<{ success: true }> {
+    const user =
+      await this.usersService.findByEmailWithVerificationCode(email);
+    if (!user) throw new NotFoundException('User not found');
+    if (user.isEmailVerified) {
+      return { success: true };
+    }
+    if (
+      !user.emailVerificationCode ||
+      !user.emailVerificationExpiresAt ||
+      user.emailVerificationCode !== code ||
+      user.emailVerificationExpiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException('Invalid or expired verification code');
+    }
+    await this.usersService.markEmailVerified(user.id);
+    return { success: true };
+  }
+
+  async resendVerification(email: string): Promise<{ success: true }> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) throw new NotFoundException('User not found');
+    if (user.isEmailVerified) {
+      return { success: true };
+    }
+    const code = this.generateCode();
+    const expiresAt = new Date(Date.now() + this.getVerificationTtlMs());
+    await this.usersService.setEmailVerificationCode(user.id, code, expiresAt);
+    try {
+      await this.mailService.sendWelcomeWithVerification(
+        user.email,
+        user.name,
+        code,
+      );
+    } catch {
+      // ignora falha
+    }
+    return { success: true };
+  }
+
+  async forgotPassword(email: string): Promise<{ success: true }> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      // silencioso para não revelar existência do email
+      return { success: true };
+    }
+    const code = this.generateCode();
+    const expiresAt = new Date(Date.now() + this.getPasswordResetTtlMs());
+    await this.usersService.setPasswordResetCode(user.id, code, expiresAt);
+    try {
+      await this.mailService.sendPasswordReset(user.email, user.name, code);
+    } catch {
+      // ignora falha
+    }
+    return { success: true };
+  }
+
+  async resetPassword(
+    email: string,
+    code: string,
+    newPassword: string,
+  ): Promise<{ success: true }> {
+    const user = await this.usersService.findByEmailWithResetCode(email);
+    if (!user) throw new NotFoundException('User not found');
+    if (
+      !user.passwordResetCode ||
+      !user.passwordResetExpiresAt ||
+      user.passwordResetCode !== code ||
+      user.passwordResetExpiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+    const hash = await bcrypt.hash(newPassword, 12);
+    await this.usersService.updatePassword(user.id, hash);
+    await this.usersService.clearPasswordResetCode(user.id);
+    return { success: true };
   }
 }

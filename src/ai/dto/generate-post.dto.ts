@@ -10,11 +10,16 @@ import {
   IsUUID,
 } from 'class-validator';
 import { ImageStyle } from '../providers/ai-provider.interface';
+import { AI_CATEGORIES } from '../../billing/config/ai-categories.config';
+import type { AiCategory } from '../../billing/config/ai-categories.config';
 
 export class GeneratePostDto {
   @IsString()
   @IsNotEmpty()
   prompt: string;
+
+  @IsEnum(AI_CATEGORIES)
+  category: AiCategory;
 
   @IsEnum(['single', 'carousel'])
   postType: 'single' | 'carousel';

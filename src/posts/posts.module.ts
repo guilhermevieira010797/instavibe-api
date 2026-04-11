@@ -7,6 +7,8 @@ import { InstagramGraphService } from './instagram-graph.service';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { AiModule } from '../ai/ai.module';
 import { S3Module } from '../s3/s3.module';
+import { BillingModule } from '../billing/billing.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { S3Module } from '../s3/s3.module';
     ProfilesModule,
     AiModule,
     S3Module,
+    BillingModule,
+    UsersModule,
   ],
   controllers: [PostsController],
   providers: [PostsService, InstagramGraphService],

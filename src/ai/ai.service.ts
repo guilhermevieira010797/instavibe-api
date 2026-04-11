@@ -11,19 +11,37 @@ import type { AiProvider } from './providers/ai-provider.interface';
 import { ProfilesService } from '../profiles/profiles.service';
 import { Profile } from '../profiles/profile.entity';
 import { DEVELOPER_PROMPT } from './constants/developer-prompt';
+import {
+  AiCategoriesConfig,
+  AiCategory,
+} from '../billing/config/ai-categories.config';
 
 @Injectable()
 export class AiService {
   constructor(
     @Inject(AI_PROVIDER) private readonly provider: AiProvider,
     private readonly profilesService: ProfilesService,
+    private readonly aiCategories: AiCategoriesConfig,
   ) {}
+
+  resolveCategoryDef(category: AiCategory) {
+    return this.aiCategories.get(category);
+  }
+
+  creditCost(
+    category: AiCategory,
+    operation: 'generate' | 'refine' | 'caption',
+    imageCount = 1,
+  ): number {
+    return this.aiCategories.costFor(category, operation, imageCount);
+  }
 
   async generateImages(
     input: Omit<GeneratePostInput, 'profileContext' | 'instructions'> & {
       profileId?: string;
       userId?: string;
       instructions?: string;
+      category: AiCategory;
     },
   ): Promise<GeneratedImages> {
     const profile = await this.resolveProfile(input.profileId, input.userId);
@@ -31,6 +49,7 @@ export class AiService {
       ? this.buildBrandContext(profile)
       : undefined;
     const instructions = this.buildInstructions(profile, input.instructions);
+    const catDef = this.aiCategories.get(input.category);
 
     const referenceImages = await this.mergeProfileReferences(
       input.profileId,
@@ -46,6 +65,8 @@ export class AiService {
       referenceImagesBase64: referenceImages,
       profileContext,
       instructions,
+      claudeModel: catDef.claudeModel,
+      imageGeneratorName: catDef.imageGenerator,
     });
   }
 
@@ -54,6 +75,7 @@ export class AiService {
       profileId?: string;
       userId?: string;
       instructions?: string;
+      category: AiCategory;
     },
   ): Promise<GeneratedImages> {
     const profile = await this.resolveProfile(input.profileId, input.userId);
@@ -61,6 +83,7 @@ export class AiService {
       ? this.buildBrandContext(profile)
       : undefined;
     const instructions = this.buildInstructions(profile, input.instructions);
+    const catDef = this.aiCategories.get(input.category);
 
     return this.provider.refineImages({
       prompt: input.prompt,
@@ -70,6 +93,8 @@ export class AiService {
       referenceImagesBase64: input.referenceImagesBase64,
       profileContext,
       instructions,
+      claudeModel: catDef.claudeModel,
+      imageGeneratorName: catDef.imageGenerator,
     });
   }
 
@@ -78,15 +103,18 @@ export class AiService {
       profileId?: string;
       userId?: string;
       instructions?: string;
+      category: AiCategory;
     },
   ): Promise<GeneratedCaption> {
     const profile = await this.resolveProfile(input.profileId, input.userId);
     const instructions = this.buildInstructions(profile, input.instructions);
+    const catDef = this.aiCategories.get(input.category);
 
     return this.provider.generateCaption({
       prompt: input.prompt,
       imagesBase64: input.imagesBase64,
       instructions,
+      claudeModel: catDef.claudeModel,
     });
   }
 

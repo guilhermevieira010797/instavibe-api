@@ -38,6 +38,8 @@ export interface GeneratePostInput {
   referenceImagesBase64?: string[];
   profileContext?: string;
   instructions?: string;
+  claudeModel?: string;
+  imageGeneratorName?: string;
 }
 
 export interface RefineImagesInput {
@@ -48,6 +50,8 @@ export interface RefineImagesInput {
   referenceImagesBase64?: string[];
   profileContext?: string;
   instructions?: string;
+  claudeModel?: string;
+  imageGeneratorName?: string;
 }
 
 export interface GeneratedImages {
@@ -59,6 +63,7 @@ export interface GenerateCaptionInput {
   prompt: string;
   imagesBase64: string[];
   instructions?: string;
+  claudeModel?: string;
 }
 
 export interface GeneratedCaption {

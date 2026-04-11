@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import {
@@ -10,8 +10,7 @@ import {
   RefineImagesInput,
   IMAGE_STYLE_LABELS,
 } from './ai-provider.interface';
-import { IMAGE_GENERATOR } from '../image-generators/image-generator.interface';
-import type { ImageGenerator } from '../image-generators/image-generator.interface';
+import { GeneratorsRegistry } from '../image-generators/generators.registry';
 
 type ImageBlockParam = Anthropic.Messages.ImageBlockParam;
 type TextBlockParam = Anthropic.Messages.TextBlockParam;
@@ -23,11 +22,25 @@ export class ClaudeProvider implements AiProvider {
 
   constructor(
     private readonly configService: ConfigService,
-    @Inject(IMAGE_GENERATOR) private readonly imageGenerator: ImageGenerator,
+    private readonly generatorsRegistry: GeneratorsRegistry,
   ) {
     this.client = new Anthropic({
       apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
     });
+  }
+
+  private resolveModel(input: { claudeModel?: string }): string {
+    return (
+      input.claudeModel ??
+      this.configService.get<string>('ANTHROPIC_MODEL') ??
+      'claude-sonnet-4-20250514'
+    );
+  }
+
+  private resolveGenerator(input: { imageGeneratorName?: string }) {
+    const fallback =
+      this.configService.get<string>('IMAGE_GENERATOR') ?? 'openai';
+    return this.generatorsRegistry.get(input.imageGeneratorName ?? fallback);
   }
 
   async generateImages(input: GeneratePostInput): Promise<GeneratedImages> {
@@ -36,13 +49,11 @@ export class ClaudeProvider implements AiProvider {
 
     const systemPrompt = this.buildGenerateSystemPrompt(input, imageCount);
     const userContent = this.buildGenerateUserContent(input);
+    const generator = this.resolveGenerator(input);
 
     const [claudeResponse, generatedImages] = await Promise.all([
       this.client.messages.create({
-        model: this.configService.get<string>(
-          'ANTHROPIC_MODEL',
-          'claude-sonnet-4-20250514',
-        ),
+        model: this.resolveModel(input),
         max_tokens: 4096,
         system: [
           ...(input.instructions
@@ -52,7 +63,7 @@ export class ClaudeProvider implements AiProvider {
         ],
         messages: [{ role: 'user', content: userContent }],
       }),
-      this.imageGenerator.generate({
+      generator.generate({
         prompt: this.buildImagePrompt(input.prompt, input.imageStyle),
         count: imageCount,
       }),
@@ -119,12 +130,11 @@ export class ClaudeProvider implements AiProvider {
       }
     }
 
+    const generator = this.resolveGenerator(input);
+
     const [claudeResponse, generatedImages] = await Promise.all([
       this.client.messages.create({
-        model: this.configService.get<string>(
-          'ANTHROPIC_MODEL',
-          'claude-sonnet-4-20250514',
-        ),
+        model: this.resolveModel(input),
         max_tokens: 4096,
         system: [
           ...(input.instructions
@@ -134,7 +144,7 @@ export class ClaudeProvider implements AiProvider {
         ],
         messages: [{ role: 'user', content: userContent }],
       }),
-      this.imageGenerator.generate({
+      generator.generate({
         prompt: this.buildImagePrompt(prompt, input.imageStyle),
         count: targetIndexes.length,
       }),
@@ -171,10 +181,7 @@ export class ClaudeProvider implements AiProvider {
     }
 
     const response = await this.client.messages.create({
-      model: this.configService.get<string>(
-        'ANTHROPIC_MODEL',
-        'claude-sonnet-4-20250514',
-      ),
+      model: this.resolveModel(input),
       max_tokens: 4096,
       system: [
         ...(input.instructions

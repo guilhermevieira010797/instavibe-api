@@ -2,14 +2,19 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { json, raw } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: true,
     credentials: true,
   });
+
+  app.use('/billing/webhooks/stripe', raw({ type: '*/*' }));
+  app.use('/billing/webhooks/pagarme', raw({ type: '*/*' }));
+  app.use(json({ limit: '50mb' }));
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),

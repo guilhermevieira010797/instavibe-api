@@ -10,11 +10,16 @@ import {
   IsArray,
   IsUUID,
 } from 'class-validator';
+import { AI_CATEGORIES } from '../../billing/config/ai-categories.config';
+import type { AiCategory } from '../../billing/config/ai-categories.config';
 
 export class CreatePostDto {
   @IsOptional()
   @IsUUID()
   profileId?: string;
+
+  @IsEnum(AI_CATEGORIES)
+  category: AiCategory;
 
   @IsEnum(['single', 'carousel'])
   postType: 'single' | 'carousel';

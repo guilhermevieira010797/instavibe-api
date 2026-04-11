@@ -1,4 +1,7 @@
 import { User } from './user.entity';
+import { PlanTier } from '../billing/entities/subscription.entity';
+
+export type UserPlan = 'free' | PlanTier;
 
 export interface SafeUser {
   id: string;
@@ -6,12 +9,19 @@ export interface SafeUser {
   email: string;
   phone: string | null;
   googleId: string | null;
-  createdAt: Date;
-  // Temporary bypass fields — remove when subscriptions are implemented
-  plan: 'free' | 'basic' | 'advanced';
+  isEmailVerified: boolean;
   credits: number;
-  maxCredits: number;
   extraCredits: number;
+  plan: UserPlan;
+  subscriptionId: string | null;
+  createdAt: Date;
+}
+
+export function resolvePlan(user: User): UserPlan {
+  if (!user.subscription || user.subscription.status !== 'active') {
+    return 'free';
+  }
+  return user.subscription.plan;
 }
 
 export function sanitizeUser(user: User): SafeUser {
@@ -21,11 +31,11 @@ export function sanitizeUser(user: User): SafeUser {
     email: user.email,
     phone: user.phone,
     googleId: user.googleId,
+    isEmailVerified: user.isEmailVerified,
+    credits: user.credits,
+    extraCredits: user.extraCredits,
+    plan: resolvePlan(user),
+    subscriptionId: user.subscriptionId,
     createdAt: user.createdAt,
-    // Bypass: grant advanced plan with full credits
-    plan: 'advanced',
-    credits: 1000,
-    maxCredits: 1000,
-    extraCredits: 0,
   };
 }

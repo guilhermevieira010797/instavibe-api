@@ -18,6 +18,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { LinkProfileDto } from './dto/link-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/user.entity';
+import { SubscriptionPolicyService } from '../billing/subscription-policy.service';
 
 interface AuthenticatedRequest extends Request {
   user: User;
@@ -28,7 +29,10 @@ interface AuthenticatedRequest extends Request {
 @UseGuards(JwtAuthGuard)
 @Controller('profiles')
 export class ProfilesController {
-  constructor(private readonly profilesService: ProfilesService) {}
+  constructor(
+    private readonly profilesService: ProfilesService,
+    private readonly policy: SubscriptionPolicyService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Criar perfil de marca' })
@@ -67,6 +71,7 @@ export class ProfilesController {
     @Req() req: AuthenticatedRequest,
     @Body() dto: LinkProfileDto,
   ) {
+    this.policy.assertInstagram(req.user);
     return this.profilesService.linkInstagram(undefined, req.user.id, dto);
   }
 
@@ -77,6 +82,7 @@ export class ProfilesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: LinkProfileDto,
   ) {
+    this.policy.assertInstagram(req.user);
     return this.profilesService.linkInstagram(id, req.user.id, dto);
   }
 

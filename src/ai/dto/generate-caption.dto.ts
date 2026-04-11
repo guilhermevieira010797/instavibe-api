@@ -5,12 +5,18 @@ import {
   ArrayMinSize,
   IsOptional,
   IsUUID,
+  IsEnum,
 } from 'class-validator';
+import { AI_CATEGORIES } from '../../billing/config/ai-categories.config';
+import type { AiCategory } from '../../billing/config/ai-categories.config';
 
 export class GenerateCaptionDto {
   @IsString()
   @IsNotEmpty()
   prompt: string;
+
+  @IsEnum(AI_CATEGORIES)
+  category: AiCategory;
 
   @IsArray()
   @ArrayMinSize(1)
