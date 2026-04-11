@@ -17,10 +17,10 @@ export interface PlanDefinition {
 @Injectable()
 export class PlansConfig {
   private readonly plans: Record<PlanTier, PlanDefinition>;
-  readonly freeMonthlyCredits: number;
+  readonly freeSignupCredits: number;
 
   constructor(private readonly config: ConfigService) {
-    this.freeMonthlyCredits = this.int('PLAN_FREE_MONTHLY_CREDITS', 0);
+    this.freeSignupCredits = this.int('PLAN_FREE_SIGNUP_CREDITS', 0);
 
     this.plans = {
       basic: {

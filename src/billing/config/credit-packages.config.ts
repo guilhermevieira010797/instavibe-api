@@ -6,14 +6,19 @@ export interface CreditPackageDefinition {
   label: string;
   credits: number;
   priceBrl: number;
-  stripePriceId: string | null;
 }
 
 @Injectable()
 export class CreditPackagesConfig {
   private readonly packages: Map<string, CreditPackageDefinition> = new Map();
 
+  readonly creditPriceBrl: number;
+
   constructor(private readonly config: ConfigService) {
+    this.creditPriceBrl = parseFloat(
+      config.get<string>('CREDIT_PRICE_BRL') ?? '0.05',
+    );
+
     const ids = (config.get<string>('CREDIT_PACKAGE_IDS') ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -26,18 +31,13 @@ export class CreditPackagesConfig {
         config.get<string>(`CREDIT_PACKAGE_${upper}_CREDITS`) ?? '0',
         10,
       );
-      const priceBrl = parseFloat(
-        config.get<string>(`CREDIT_PACKAGE_${upper}_PRICE_BRL`) ?? '0',
-      );
-      const stripePriceId =
-        config.get<string>(`CREDIT_PACKAGE_${upper}_STRIPE_PRICE_ID`) || null;
+      const safeCredits = Number.isFinite(credits) ? credits : 0;
 
       this.packages.set(id, {
         id,
         label,
-        credits: Number.isFinite(credits) ? credits : 0,
-        priceBrl: Number.isFinite(priceBrl) ? priceBrl : 0,
-        stripePriceId,
+        credits: safeCredits,
+        priceBrl: parseFloat((safeCredits * this.creditPriceBrl).toFixed(2)),
       });
     }
   }

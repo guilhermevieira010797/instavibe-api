@@ -15,7 +15,7 @@ export class SubscriptionPolicyService {
       case 'basic':
         return category === 'simples';
       case 'standard':
-        return category === 'simples' || category === 'medio';
+        return true;
       case 'premium':
         return true;
       default:

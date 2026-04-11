@@ -3,7 +3,6 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ClaudeProvider } from './providers/claude.provider';
 import { OpenAiProvider } from './providers/openai.provider';
-import { AI_PROVIDER } from './providers/ai-provider.interface';
 import { OpenAiImageGenerator } from './image-generators/openai-image.generator';
 import { StabilityImageGenerator } from './image-generators/stability-image.generator';
 import { FalImageGenerator } from './image-generators/fal-image.generator';
@@ -24,10 +23,6 @@ import { BillingModule } from '../billing/billing.module';
     FalImageGenerator,
     ReplicateImageGenerator,
     GeneratorsRegistry,
-    {
-      provide: AI_PROVIDER,
-      useExisting: ClaudeProvider,
-    },
   ],
   exports: [AiService],
 })

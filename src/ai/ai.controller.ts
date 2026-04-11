@@ -45,8 +45,7 @@ export class AiController {
       this.policy.assertCarousel(req.user);
     }
 
-    const imageCount =
-      dto.postType === 'carousel' ? (dto.slidesCount ?? 5) : 1;
+    const imageCount = dto.postType === 'carousel' ? (dto.slidesCount ?? 5) : 1;
     const cost = this.aiCategories.costFor(
       dto.category,
       'generate',
@@ -81,11 +80,7 @@ export class AiController {
       throw new BadRequestException('No images to refine');
     }
 
-    const cost = this.aiCategories.costFor(
-      dto.category,
-      'refine',
-      imageCount,
-    );
+    const cost = this.aiCategories.costFor(dto.category, 'refine', imageCount);
     const debit = await this.ledger.consume(req.user.id, cost);
 
     try {

@@ -72,15 +72,22 @@ export class StripeProvider implements BillingProvider {
     email: string;
     pkg: CreditPackageDefinition;
   }): Promise<{ url: string; sessionId: string }> {
-    if (!params.pkg.stripePriceId) {
-      throw new Error(
-        `Stripe price id missing for credit package ${params.pkg.id}`,
-      );
-    }
     const session = await this.client.checkout.sessions.create({
       mode: 'payment',
       customer_email: params.email,
-      line_items: [{ price: params.pkg.stripePriceId, quantity: 1 }],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'brl',
+            unit_amount: Math.round(params.pkg.priceBrl * 100),
+            product_data: {
+              name: params.pkg.label,
+              description: `${params.pkg.credits} créditos`,
+            },
+          },
+        },
+      ],
       success_url:
         this.config.get<string>('STRIPE_SUCCESS_URL') ??
         'http://localhost:3000/billing/success',

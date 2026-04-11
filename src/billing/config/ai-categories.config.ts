@@ -60,10 +60,7 @@ export class AiCategoriesConfig {
               `CREDITS_COST_GENERATE_${upper}`,
               def.costs.generate,
             ),
-            refine: this.int(
-              `CREDITS_COST_REFINE_${upper}`,
-              def.costs.refine,
-            ),
+            refine: this.int(`CREDITS_COST_REFINE_${upper}`, def.costs.refine),
             caption: this.int(
               `CREDITS_COST_CAPTION_${upper}`,
               def.costs.caption,

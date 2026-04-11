@@ -1,6 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
-  AI_PROVIDER,
   GeneratePostInput,
   GeneratedImages,
   GenerateCaptionInput,
@@ -8,6 +7,8 @@ import {
   RefineImagesInput,
 } from './providers/ai-provider.interface';
 import type { AiProvider } from './providers/ai-provider.interface';
+import { ClaudeProvider } from './providers/claude.provider';
+import { OpenAiProvider } from './providers/openai.provider';
 import { ProfilesService } from '../profiles/profiles.service';
 import { Profile } from '../profiles/profile.entity';
 import { DEVELOPER_PROMPT } from './constants/developer-prompt';
@@ -19,10 +20,15 @@ import {
 @Injectable()
 export class AiService {
   constructor(
-    @Inject(AI_PROVIDER) private readonly provider: AiProvider,
+    private readonly claudeProvider: ClaudeProvider,
+    private readonly openAiProvider: OpenAiProvider,
     private readonly profilesService: ProfilesService,
     private readonly aiCategories: AiCategoriesConfig,
   ) {}
+
+  private resolveProvider(category: AiCategory): AiProvider {
+    return category === 'avancado' ? this.openAiProvider : this.claudeProvider;
+  }
 
   resolveCategoryDef(category: AiCategory) {
     return this.aiCategories.get(category);
@@ -57,7 +63,7 @@ export class AiService {
       input.referenceImagesBase64,
     );
 
-    return this.provider.generateImages({
+    return this.resolveProvider(input.category).generateImages({
       prompt: input.prompt,
       postType: input.postType,
       slidesCount: input.slidesCount,
@@ -85,7 +91,7 @@ export class AiService {
     const instructions = this.buildInstructions(profile, input.instructions);
     const catDef = this.aiCategories.get(input.category);
 
-    return this.provider.refineImages({
+    return this.resolveProvider(input.category).refineImages({
       prompt: input.prompt,
       currentImagesBase64: input.currentImagesBase64,
       slideIndexes: input.slideIndexes,
@@ -110,7 +116,7 @@ export class AiService {
     const instructions = this.buildInstructions(profile, input.instructions);
     const catDef = this.aiCategories.get(input.category);
 
-    return this.provider.generateCaption({
+    return this.resolveProvider(input.category).generateCaption({
       prompt: input.prompt,
       imagesBase64: input.imagesBase64,
       instructions,

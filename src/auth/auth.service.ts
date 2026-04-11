@@ -13,6 +13,8 @@ import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 import { SafeUser, sanitizeUser } from '../users/user.utils';
 import { MailService } from '../mail/mail.service';
+import { CreditLedgerService } from '../billing/credit-ledger.service';
+import { PlansConfig } from '../billing/config/plans.config';
 import { SignupDto } from './dto/signup.dto';
 
 export interface AuthResponse {
@@ -28,6 +30,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly mailService: MailService,
+    private readonly creditLedger: CreditLedgerService,
+    private readonly plansConfig: PlansConfig,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User> {
@@ -146,6 +150,12 @@ export class AuthService {
       } catch {
         // ignora falha de e-mail
       }
+      if (this.plansConfig.freeSignupCredits > 0) {
+        await this.creditLedger.addExtra(
+          user.id,
+          this.plansConfig.freeSignupCredits,
+        );
+      }
     }
     return this.buildAuthResponse(user);
   }
@@ -166,6 +176,12 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired verification code');
     }
     await this.usersService.markEmailVerified(user.id);
+    if (this.plansConfig.freeSignupCredits > 0) {
+      await this.creditLedger.addExtra(
+        user.id,
+        this.plansConfig.freeSignupCredits,
+      );
+    }
     return { success: true };
   }
 
